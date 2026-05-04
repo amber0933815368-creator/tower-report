@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>爬塔落點分析</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0f0f1a;min-height:100vh;padding:1.25rem;font-family:sans-serif;}
+.wrap{background:#1a1a2e;border-radius:12px;padding:1.5rem;color:#e8e8f0;}
+.page-title{font-size:15px;font-weight:500;color:#aaaacc;margin-bottom:1.25rem;letter-spacing:.5px;}
+.season-tabs{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;}
+.stab{font-size:14px;font-weight:500;padding:8px 22px;border-radius:8px;border:1.5px solid #444466;background:transparent;color:#8888aa;cursor:pointer;}
+.stab.active{background:#5DCAA5;border-color:#5DCAA5;color:#0f0f1a;}
+.metric-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem;}
+.metric{background:#252540;border-radius:8px;padding:.75rem 1rem;flex:1;min-width:100px;}
+.metric .label{font-size:12px;color:#8888aa;margin-bottom:4px;}
+.metric .val{font-size:20px;font-weight:500;color:#e8e8f0;}
+.controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:1rem;}
+.toggle-row{display:flex;gap:6px;}
+.tbtn{font-size:12px;padding:4px 14px;border-radius:6px;border:1px solid #444466;background:transparent;color:#aaaacc;cursor:pointer;}
+.tbtn.active{background:#378ADD;border-color:#378ADD;color:#fff;}
+.sep{width:1px;background:#333355;align-self:stretch;}
+.check-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.check-row label{display:flex;align-items:center;gap:5px;font-size:12px;color:#aaaacc;cursor:pointer;user-select:none;}
+.check-row input[type=checkbox]{accent-color:#5DCAA5;width:14px;height:14px;}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block;}
+.view-tabs{display:flex;gap:8px;margin-bottom:1rem;}
+.vtab{font-size:12px;padding:4px 14px;border-radius:6px;border:1px solid #444466;background:transparent;color:#aaaacc;cursor:pointer;}
+.vtab.active{background:#5b4db8;border-color:#5b4db8;color:#fff;}
+.srv-label{font-size:12px;font-weight:500;margin-bottom:6px;color:#aaaacc;}
+.grid2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.25rem 1rem;}
+.hint{font-size:11px;color:#555577;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-title">爬塔落點分析</div>
+
+  <div class="season-tabs">
+    <button class="stab active" onclick="switchMainTab('compare')">全服多季比較</button>
+    <button class="stab" onclick="switchMainTab('detail')">單季各服明細</button>
+  </div>
+
+  <!-- 多季比較 -->
+  <div id="tab-compare">
+    <div class="controls">
+      <div class="toggle-row">
+        <button class="tbtn active" id="btnPct" onclick="setMode('pct')">百分比</button>
+        <button class="tbtn" id="btnCnt" onclick="setMode('cnt')">人數</button>
+      </div>
+      <div class="sep"></div>
+      <div class="check-row" id="seasonChecks"></div>
+    </div>
+    <div style="position:relative;width:100%;height:380px;">
+      <canvas id="lineChart" role="img" aria-label="多季落點折線比較圖">多季落點折線圖</canvas>
+    </div>
+    <div class="hint">滑鼠懸停可查看數值 · 勾選上方季度可自由組合比較</div>
+  </div>
+
+  <!-- 單季明細 -->
+  <div id="tab-detail" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;" id="detailSeasonBtns"></div>
+    <div id="detail-metrics" class="metric-grid"></div>
+    <div class="view-tabs">
+      <button class="vtab active" id="vAll" onclick="showDetailView('all')">全服綜合 %</button>
+      <button class="vtab" id="vInd" onclick="showDetailView('individual')">各服個別</button>
+    </div>
+    <div id="detail-view-all">
+      <div style="position:relative;width:100%;height:300px;">
+        <canvas id="detailAll" role="img" aria-label="單季全服綜合">單季全服綜合</canvas>
+      </div>
+    </div>
+    <div id="detail-view-ind" style="display:none;">
+      <div class="grid2" id="indGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const labels = ['0-50','51-100','101-150','151-200','201-250','251-300','301-350','351-400','401-450','451-500','Over 500'];
+
+const seasonData = {
+  1:{
+    label:'第一季', color:'#5DCAA5', total:3393,
+    servers:[
+      {name:'服1', total:736, data:[62,35,30,273,202,50,19,15,23,26,5]},
+      {name:'服2', total:563, data:[44,16,27,233,166,30,17,11,7,18,0]},
+      {name:'服3', total:877, data:[63,33,51,370,217,44,27,16,22,28,6]},
+      {name:'服6', total:557, data:[59,29,24,189,144,37,21,24,7,20,3]},
+      {name:'服12',total:332, data:[36,14,24,163,60,13,10,6,0,4,1]},
+      {name:'服13',total:307, data:[83,36,50,108,23,2,3,0,1,1,0]},
+    ]
+  }
+  // 第二季之後在這裡新增：
+  // 2:{ label:'第二季', color:'#378ADD', total:0, servers:[] },
+};
+
+const COMING=[2,3,4];
+const SEASON_COLORS=[,'#5DCAA5','#378ADD','#EF9F27','#D4537E','#7F77DD','#D85A30'];
+const TICK='#8888aa',GRID='rgba(255,255,255,0.07)';
+const TIP={backgroundColor:'#252540',titleColor:'#e8e8f0',bodyColor:'#aaaacc'};
+const baseScales=(sz=10)=>({
+  x:{ticks:{color:TICK,font:{size:sz},autoSkip:false,maxRotation:45},grid:{color:GRID}},
+  y:{ticks:{color:TICK,font:{size:sz}},grid:{color:GRID},beginAtZero:true}
+});
+
+let mode='pct', activeSeasons=new Set([1]);
+let lineChart=null, detailAllChart=null, detailIndCharts=[], currentDetailSeason=1;
+
+function getSeasonTotals(sid){
+  return labels.map((_,i)=>seasonData[sid].servers.reduce((s,sv)=>s+(sv.data[i]||0),0));
+}
+
+function buildLineChart(){
+  if(lineChart) lineChart.destroy();
+  const datasets=[];
+  activeSeasons.forEach(sid=>{
+    if(!seasonData[sid]) return;
+    const s=seasonData[sid];
+    const tots=getSeasonTotals(sid);
+    const grand=tots.reduce((a,b)=>a+b,0);
+    const data=mode==='pct'?tots.map(v=>parseFloat((v/grand*100).toFixed(1))):tots;
+    datasets.push({
+      label:s.label, data,
+      borderColor:s.color, backgroundColor:s.color+'33',
+      pointBackgroundColor:s.color,
+      pointRadius:4, pointHoverRadius:6,
+      borderWidth:2, tension:0.3, fill:false
+    });
+  });
+  lineChart=new Chart(document.getElementById('lineChart'),{
+    type:'line', data:{labels,datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{...TIP,callbacks:{label:ctx=>{
+        const u=mode==='pct'?'%':'人';
+        return ` ${ctx.dataset.label}：${ctx.parsed.y}${u}`;
+      }}}},
+      scales:baseScales(11)
+    }
+  });
+}
+
+function buildChecks(){
+  const el=document.getElementById('seasonChecks');
+  el.innerHTML='';
+  Object.keys(seasonData).forEach(sid=>{
+    sid=parseInt(sid);
+    const s=seasonData[sid];
+    const lbl=document.createElement('label');
+    lbl.innerHTML=`<input type="checkbox" ${activeSeasons.has(sid)?'checked':''} onchange="toggleSeason(${sid},this.checked)"><span class="dot" style="background:${s.color}"></span>${s.label}`;
+    el.appendChild(lbl);
+  });
+  COMING.forEach(sid=>{
+    const lbl=document.createElement('label');
+    lbl.style.opacity='.3';
+    lbl.innerHTML=`<input type="checkbox" disabled><span class="dot" style="background:#444466"></span>第${sid}季`;
+    el.appendChild(lbl);
+  });
+}
+
+function buildDetailBtns(){
+  const el=document.getElementById('detailSeasonBtns');
+  el.innerHTML='';
+  Object.keys(seasonData).forEach(sid=>{
+    sid=parseInt(sid);
+    const b=document.createElement('button');
+    b.className='tbtn'+(sid===currentDetailSeason?' active':'');
+    b.textContent=seasonData[sid].label;
+    b.onclick=()=>switchDetailSeason(sid);
+    el.appendChild(b);
+  });
+}
+
+function buildDetailMetrics(){
+  const s=seasonData[currentDetailSeason];
+  const max=s.servers.reduce((a,b)=>a.total>b.total?a:b);
+  const min=s.servers.reduce((a,b)=>a.total<b.total?a:b);
+  document.getElementById('detail-metrics').innerHTML=`
+    <div class="metric"><div class="label">總參與人數</div><div class="val">${s.total.toLocaleString()}</div></div>
+    <div class="metric"><div class="label">參與服數</div><div class="val">${s.servers.length} 服</div></div>
+    <div class="metric"><div class="label">最大服（${max.name}）</div><div class="val">${max.total} 人</div></div>
+    <div class="metric"><div class="label">最小服（${min.name}）</div><div class="val">${min.total} 人</div></div>
+  `;
+}
+
+function buildDetailAllChart(){
+  if(detailAllChart) detailAllChart.destroy();
+  const tots=getSeasonTotals(currentDetailSeason);
+  const grand=tots.reduce((a,b)=>a+b,0);
+  const pcts=tots.map(v=>parseFloat((v/grand*100).toFixed(1)));
+  detailAllChart=new Chart(document.getElementById('detailAll'),{
+    type:'bar', data:{labels,datasets:[{data:pcts,backgroundColor:'#5DCAA5',borderRadius:4,hoverBackgroundColor:'#9FE1CB'}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TIP,callbacks:{label:ctx=>`${ctx.parsed.y}%（${tots[ctx.dataIndex]}人）`}}},
+      scales:baseScales(11)}
+  });
+}
+
+function buildDetailInd(){
+  detailIndCharts.forEach(c=>c.destroy());
+  detailIndCharts=[];
+  const s=seasonData[currentDetailSeason];
+  const grid=document.getElementById('indGrid');
+  grid.innerHTML='';
+  s.servers.forEach((sv,i)=>{
+    const div=document.createElement('div');
+    div.innerHTML=`<div class="srv-label">${sv.name} — ${sv.total}人</div><div style="position:relative;height:240px;"><canvas id="ic${i}" role="img" aria-label="${sv.name}">${sv.name}</canvas></div>`;
+    grid.appendChild(div);
+    setTimeout(()=>{
+      const c=new Chart(document.getElementById('ic'+i),{
+        type:'bar',
+        data:{labels,datasets:[{data:sv.data,backgroundColor:'#378ADD',borderRadius:3,hoverBackgroundColor:'#85B7EB'}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{...TIP,callbacks:{label:ctx=>`${ctx.parsed.y} 人`}}},
+          scales:baseScales(9)}
+      });
+      detailIndCharts.push(c);
+    },0);
+  });
+}
+
+window.toggleSeason=function(sid,checked){
+  if(checked) activeSeasons.add(sid); else activeSeasons.delete(sid);
+  if(activeSeasons.size===0){activeSeasons.add(sid);}
+  buildLineChart();
+};
+window.setMode=function(m){
+  mode=m;
+  document.getElementById('btnPct').className='tbtn'+(m==='pct'?' active':'');
+  document.getElementById('btnCnt').className='tbtn'+(m==='cnt'?' active':'');
+  buildLineChart();
+};
+window.switchMainTab=function(t){
+  document.getElementById('tab-compare').style.display=t==='compare'?'block':'none';
+  document.getElementById('tab-detail').style.display=t==='detail'?'block':'none';
+  document.querySelectorAll('.season-tabs .stab').forEach((b,i)=>{
+    b.className='stab'+(['compare','detail'][i]===t?' active':'');
+  });
+};
+window.showDetailView=function(v){
+  document.getElementById('detail-view-all').style.display=v==='all'?'block':'none';
+  document.getElementById('detail-view-ind').style.display=v==='individual'?'block':'none';
+  document.getElementById('vAll').className='vtab'+(v==='all'?' active':'');
+  document.getElementById('vInd').className='vtab'+(v==='individual'?' active':'');
+};
+window.switchDetailSeason=function(sid){
+  currentDetailSeason=sid;
+  buildDetailBtns();
+  buildDetailMetrics();
+  buildDetailAllChart();
+  buildDetailInd();
+};
+
+buildChecks();
+buildLineChart();
+buildDetailBtns();
+buildDetailMetrics();
+buildDetailAllChart();
+buildDetailInd();
+</script>
+</body>
+</html>
