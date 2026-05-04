@@ -83,7 +83,7 @@ const labels = ['0-50','51-100','101-150','151-200','201-250','251-300','301-350
 
 const seasonData = {
   1:{
-    label:'第一季', color:'#5DCAA5', total:3393,
+    label:'第一季', color:'#5DCAA5', total:3393, topFloor:508,
     servers:[
       {name:'服1', total:736, data:[62,35,30,273,202,50,19,15,23,26,5]},
       {name:'服2', total:563, data:[44,16,27,233,166,30,17,11,7,18,0]},
@@ -183,6 +183,7 @@ function buildDetailMetrics(){
     <div class="metric"><div class="label">參與服數</div><div class="val">${s.servers.length} 服</div></div>
     <div class="metric"><div class="label">最大服（${max.name}）</div><div class="val">${max.total} 人</div></div>
     <div class="metric"><div class="label">最小服（${min.name}）</div><div class="val">${min.total} 人</div></div>
+    <div class="metric"><div class="label">全服最高層</div><div class="val">${s.topFloor} 層</div></div>
   `;
 }
 
